@@ -1,0 +1,137 @@
+document.addEventListener("DOMContentLoaded", () => {
+    const textInput = document.getElementById("textInput");
+    const outputBox = document.getElementById("outputBox");
+    const output = document.getElementById("output");
+    const charCount = document.getElementById("charCount");
+    const speechInput = document.getElementById("speechInput");
+    const speakSummary = document.getElementById("speakSummary");
+    const darkModeToggle = document.getElementById("darkModeToggle");
+
+    textInput.addEventListener("input", () => {
+        charCount.innerText = `${textInput.value.length} characters`;
+    });
+
+    speechInput.addEventListener("click", () => {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = "en-US";
+        recognition.start();
+        recognition.onresult = event => {
+            const transcript = event.results[0][0].transcript;
+            textInput.value = transcript;
+            charCount.innerText = `${transcript.length} characters`;
+        };
+    });
+
+    speakSummary.addEventListener("click", () => {
+        const speech = new SpeechSynthesisUtterance(output.innerText);
+        speechSynthesis.speak(speech);
+    });
+
+    darkModeToggle.addEventListener("click", () => {
+        document.body.classList.toggle("dark-mode");
+    });
+});
+
+function summarizeText() {
+    const text = document.getElementById("textInput").value.trim();
+    const outputBox = document.getElementById("outputBox");
+    const output = document.getElementById("output");
+
+    if (text === "") {
+        output.innerText = "⚠️ Please enter text to summarize.";
+        outputBox.classList.add("expanded");
+        return;
+    }
+
+    const sentences = text.match(/[^.!?]+[.!?]?/g) || [text];
+    const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+    const freq = {};
+
+    words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+
+    const scored = sentences.map(s => ({
+        sentence: s.trim(),
+        score: (s.toLowerCase().match(/\b\w+\b/g) || []).reduce((sum, w) => sum + (freq[w] || 0), 0)
+    }));
+
+    const summary = scored
+        .sort((a, b) => b.score - a.score)
+        .slice(0, Math.min(2, scored.length))
+        .map(s => s.sentence)
+        .join(" ");
+
+    output.innerText = summary;
+    outputBox.classList.add("expanded");
+    document.getElementById("copyBtn").style.display = "inline-block";
+    document.getElementById("downloadBtn").style.display = "inline-block";
+
+    fetchResources(text);
+    generateFlashcards(text);
+    addToHistory(summary);
+
+    
+}
+
+function copySummary() {
+    const output = document.getElementById("output").innerText;
+    navigator.clipboard.writeText(output).then(() => alert("📋 Summary copied to clipboard!"));
+}
+
+function downloadSummary() {
+    const output = document.getElementById("output").innerText;
+    const blob = new Blob([output], { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "summary.txt";
+    link.click();
+}
+
+function fetchResources(query) {
+    const search = encodeURIComponent(query);
+    document.getElementById("resourceLinks").innerHTML = `
+        <li><a href="https://www.google.com/search?q=${search}" target="_blank">🔎 Google</a></li>
+        <li><a href="https://www.youtube.com/results?search_query=${search}" target="_blank">🎥 YouTube</a></li>
+        <li><a href="https://scholar.google.com/scholar?q=${search}" target="_blank">📚 Google Scholar</a></li>
+    `;
+}
+function generateFlashcards(query) {
+    const keywords = [...new Set(query.match(/\b\w{5,}\b/g) || [])].slice(0, 4); // 4 keywords
+    const cardContainer = document.getElementById("cardContainer");
+    cardContainer.innerHTML = "";
+
+    keywords.forEach(word => {
+        const card = document.createElement("div");
+        card.innerText = word;
+        card.style.cssText = `
+            padding: 10px 15px;
+            background: #e0f7fa;
+            border-radius: 10px;
+            cursor: pointer;
+            flex: 1 1 40%;
+            text-align: center;
+        `;
+        card.onclick = () => {
+            fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`)
+                .then(res => res.json())
+                .then(data => {
+                    const meaning = data[0]?.meanings[0]?.definitions[0]?.definition || "No definition found.";
+                    alert(`📘 ${word}:\n${meaning}`);
+                })
+                .catch(() => alert(`No definition found for "${word}".`));
+        };
+        cardContainer.appendChild(card);
+    });
+}
+function addToHistory(summary) {
+    const list = document.getElementById("historyList");
+    const item = document.createElement("li");
+    item.innerText = summary.length > 50 ? summary.slice(0, 50) + "..." : summary;
+    item.title = summary;
+    item.onclick = () => {
+        document.getElementById("output").innerText = summary;
+        document.getElementById("outputBox").classList.add("expanded");
+    };
+    list.prepend(item);
+}
+
+
